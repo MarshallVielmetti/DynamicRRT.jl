@@ -243,8 +243,7 @@ end
 
 
 
-function rrt_rewire!(problem::AbstractProblem, solution::RRTStarSolution, i_new_node::LinearIndex) where {T}
-
+function rrt_rewire!(problem::AbstractProblem, solution::RRTStarSolution, i_new_node::LinearIndex)
     n_new = solution.hash_map[i_new_node]
     I_near = near(problem, solution.hash_map, n_new.state)
 
