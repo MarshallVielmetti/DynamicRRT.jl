@@ -15,19 +15,10 @@ The implementation is particularly well-suited for robotics applications requiri
 
 ## Installation
 
-Since this is a Julia package, you can install it by adding it to your Julia environment. First, make sure you have Julia installed (version 1.6 or higher recommended).
+To add this package to your Julia project, open the Julia REPL, enter package mode by pressing `]`, and then run:
 
-### From a local clone:
+```julia
+add https://github.com/MarshallVielmetti/DynamicRRT.jl.git
+```
 
-1. Clone this repository:
-   ```bash
-   git clone <repository-url>
-   cd dynamic_rrt
-   ```
-
-2. Start Julia in the project directory and activate the environment:
-   ```julia
-   using Pkg
-   Pkg.activate(".")
-   Pkg.instantiate()
-   ```
+This will download the package and install it as a dependency in your current project's environment.
