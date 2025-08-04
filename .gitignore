@@ -1,0 +1,10 @@
+# Julia environments
+.julia/
+
+# Build artifacts
+/build/
+/doc/build/
+
+# Other
+*.log
+.DS_Store

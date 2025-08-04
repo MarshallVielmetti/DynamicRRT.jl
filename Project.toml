@@ -1,0 +1,16 @@
+name = "DynamicRRT"
+uuid = "be312fe0-eb12-4688-a566-77474f18788e"
+authors = ["mvielmet <mvielmet@umich.edu>"]
+version = "0.1.0"
+
+[deps]
+Dubins = "c4b27c1d-289f-5655-aa69-f096df7d9e2b"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[compat]
+Dubins = "1.2.1"
+LinearAlgebra = "1.11.0"
+StaticArrays = "1.9.14"
+Test = "1.11.0"
