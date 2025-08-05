@@ -535,6 +535,7 @@ function best_path!(problem::AbstractProblem, solution::RRTStarSolution)
         if c < solution.best_path_cost
             solution.best_path_cost = c
             solution.best_path = extract_path(solution, i)
+            push!(solution.best_path, SVector{4,Float64}(problem.goal_state..., 0.0)) # Append the goal state to the path
         end
     end
 end

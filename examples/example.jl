@@ -52,7 +52,7 @@ end
 plot_tree!(rrt_problem, sol)
 plot_tree_dynamic!(rrt_problem, sol, τ)
 plot_path!(rrt_problem, sol.best_path)
-savefig("dubins_dynamic_rrt_star.png")
+savefig("examples/dubins_dynamic_rrt_star.png")
 
 readme_gif = @animate for t in range(0.0, 2.0, length=60)
     plot()
@@ -70,4 +70,4 @@ readme_gif = @animate for t in range(0.0, 2.0, length=60)
     xlims!(-0.75, 1.25)
 end
 
-gif(readme_gif, "dubins_dynamic_rrt_star.gif", fps=15)
+gif(readme_gif, "examples/dubins_dynamic_rrt_star.gif", fps=15)

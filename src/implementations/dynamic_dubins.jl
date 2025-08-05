@@ -332,6 +332,8 @@ For this problem, it checks if the 2D position of the new node is within a certa
 tolerance of the goal's 2D position.
 """
 function RRTStar.goal_reachable(problem::DubinsDynamicRRTProblem, hash_map, i_new)
+    curr_state = hash_map[i_new].state
+    return RRTStar.collision_free(problem, curr_state, problem.goal_state)
 
     if isnothing(problem.goal_state)
         return false
