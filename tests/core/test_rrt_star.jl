@@ -187,7 +187,7 @@ end
             # Add a more expensive path to the goal to ensure the best one is chosen
             node_c = RRTStar.ChildNode(SVector{2,Float64}(3.0, 0.1), RRTStar.LinearIndex(1), 4.0) # Higher cost
             i_c = insert!(solution.hash_map, node_c, RRTStar.spatial_position(problem, node_c.state))
-            push!(solution.root_node.children, RRTStar.LinearIndex(i_c))
+            push!(solution.root__node.children, RRTStar.LinearIndex(i_c))
 
             RRTStar.best_path!(problem, solution)
             @test solution.best_path_cost == 3.0 # Should not change
