@@ -120,7 +120,7 @@ end
     SolutionStatus
 
 An enum representing the termination status of the `solve!` function.
-- `GoalReachable`: The algorithm found a path to the goal.
+- `GoalReachable`: The algorithm found at least one path to the goal region.
 - `MaxIterations`: The algorithm terminated after reaching the maximum number of iterations.
 - `MaxTime`: The algorithm terminated after reaching the maximum time limit.
 - `NotSolved`: The algorithm has not been run or has not terminated yet.
@@ -143,12 +143,14 @@ Contains the state of the RRT* algorithm's execution.
 - `root_node::Node{T}`: The root node of the tree.
 - `hash_map::SpatialHashMap{DIM,F,Node{T}}`: The spatial hash map storing all the nodes in the tree for efficient spatial queries.
 - `best_path::Union{Nothing,Vector{T}}`: The best path found so far (if any).
+- `best_path_cost::Float64`: The cost of the best path found so far (`Inf` if no path is found).
 - `status::S`: The `SolutionStatus` of the algorithm.
 """
 mutable struct RRTStarSolution{T,DIM,F,S} <: AbstractSolution
     root_node::Node{T}
     hash_map::SpatialHashMap{DIM,F,Node{T}}
     best_path::Union{Nothing,Vector{T}}
+    best_path_cost::Float64
     status::S
 end
 
@@ -178,6 +180,7 @@ function setup(problem::AbstractProblem, start_state::T, hash_map_widths::SVecto
     insert!(hash_map, root_node, origin)
 
     best_path = nothing
+    best_path_cost = Inf
     status = NotSolved
 
     # create the solution structure
@@ -185,6 +188,7 @@ function setup(problem::AbstractProblem, start_state::T, hash_map_widths::SVecto
         root_node,
         hash_map,
         best_path,
+        best_path_cost,
         status
     )
 
@@ -206,7 +210,7 @@ Runs the RRT* algorithm to find a path.
 - `max_time_seconds=1.0`: The maximum time in seconds to run the algorithm.
 - `distance_fraction=0.2`: The fraction of the distance to steer towards the random sample.
 - `do_rewire=true`: Whether to perform the RRT* rewiring step.
-- `early_exit=true`: Whether to exit as soon as a path to the goal is found.
+- `early_exit=true`: If `true`, the algorithm terminates as soon as the first path to the goal is found.
 - `goal_bias=0.1`: The probability of sampling the goal state instead of a random state.
 
 # Returns
@@ -243,10 +247,12 @@ function solve!(problem::AbstractProblem, solution::RRTStarSolution;
             continue
         end
 
-        if early_exit
-            if goal_reachable(problem, solution.hash_map, i_new_node)
-                # return the best path
-                solution.status = GoalReachable
+        # If the new node is the first one to reach the goal region, update the status.
+        # If early_exit is enabled, compute the path and terminate.
+        if solution.status != GoalReachable && goal_reachable(problem, solution.hash_map, i_new_node)
+            solution.status = GoalReachable
+            if early_exit
+                best_path!(problem, solution) # Find and store the best path
                 return solution
             end
         end
@@ -259,7 +265,13 @@ function solve!(problem::AbstractProblem, solution::RRTStarSolution;
     end
 
     # exited because of max iterations
-    solution.status = MaxIterations
+    if solution.status != GoalReachable
+        solution.status = MaxIterations
+    end
+
+    # Find the best path among all goal-reaching nodes found.
+    best_path!(problem, solution)
+
     return solution
 end
 
@@ -436,7 +448,6 @@ function change_parent!(problem::AbstractProblem, solution, i_node, i_new_parent
 
     # add this node to the parents children
     push!(n_new_parent.children, i_node)
-
 end
 
 """
@@ -481,7 +492,6 @@ function recalculate_tree!(problem::AbstractProblem, solution, i_node)
     end
 
     return
-
 end
 
 """
@@ -501,6 +511,50 @@ function mark_branch_as_invalid(problem, solution, i_node)
         mark_branch_as_invalid(problem, solution, i_child)
     end
     return
+end
+
+"""
+    best_path!(problem::AbstractProblem, solution::RRTStarSolution)
+
+Finds the best path to the goal among all nodes in the tree.
+It iterates through all nodes, checks if they reach the goal, and if so,
+updates the `best_path` and `best_path_cost` in the solution object if the new path is better.
+"""
+function best_path!(problem::AbstractProblem, solution::RRTStarSolution)
+    # Loop through all nodes to find the one with the lowest cost that is reachable to the goal
+    for (i, node) in enumerate(solution.hash_map)
+        # If the goal is not reachable from this node, or the node is invalid, skip it
+        if is_invalid(node) || !goal_reachable(problem, solution.hash_map, i)
+            continue
+        end
+        # Set exit status to reachable if at least one node can reach the goal
+        solution.status = GoalReachable
+
+        # Compute the total cost to the goal using that node
+        c = cost(node)
+        if c < solution.best_path_cost
+            solution.best_path_cost = c
+            solution.best_path = extract_path(solution, i)
+        end
+    end
+end
+
+"""
+    extract_path(solution::RRTStarSolution, node_i)
+
+Extracts the path from the root to the node at index `node_i` by backtracking from child to parent.
+Returns a vector of states representing the path.
+"""
+function extract_path(solution::RRTStarSolution, node_i)
+    path = []
+    current = solution.hash_map[node_i]
+
+    push!(path, current.state)
+    while !isnothing(current) && has_parent(current)
+        current = solution.hash_map[current.parent]
+        push!(path, current.state)
+    end
+    return reverse(path)
 end
 
 
@@ -573,6 +627,15 @@ Check if the goal is reachable from the new node `i_new`.
 """
 function goal_reachable(problem::P, hash_map, i_new) where {T,P<:AbstractProblem{T}}
     throw(MethodError(goal_reachable, (problem, hash_map, i_new)))
+end
+
+"""
+    cost_to_goal(problem::P, node::Node{T}) where {T,P<:AbstractProblem{T}}
+
+Calculate the cost from a given `node` to the goal. This is used to find the true best path.
+"""
+function cost_to_goal(problem::P, node::Node{T}) where {T,P<:AbstractProblem{T}}
+    throw(MethodError(cost_to_goal, (problem, node)))
 end
 
 end

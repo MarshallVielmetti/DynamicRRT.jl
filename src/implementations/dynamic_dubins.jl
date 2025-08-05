@@ -1,3 +1,16 @@
+"""
+    DubinsDynamicPathRRT
+
+This module provides a concrete implementation of the `RRTStar.AbstractProblem` for a Dubins car model operating in an environment with both static and dynamic obstacles.
+
+The state is time-augmented, represented as `SVector{4,F}` for `(x, y, θ, t)`, where `t` is the time elapsed along the path from the start. This allows for planning in dynamic environments where obstacles move over time.
+
+This module defines:
+- Obstacle types: `CircleObstacle` (static) and `DynamicCircleObstacle`.
+- The `DubinsDynamicRRTProblem` struct to define the planning problem.
+- Implementations for all required functions from the `RRTStar` interface, such as `steer`, `collision_free`, `nearest`, etc., tailored for Dubins dynamics and time-varying collision checking.
+- A suite of plotting utilities for visualizing the RRT* tree, paths, and obstacles.
+"""
 module DubinsDynamicPathRRT
 
 using ..RRTStar
@@ -44,7 +57,7 @@ DynamicCircleObstacle(c, r) = DynamicCircleObstacle(c, r, (-Inf, Inf))
 """
     random_static_obstacle(radius=0.2)
 
-Generates a `CircleObstacle` with a random center and radius.
+Generates a `CircleObstacle` with a random center and radius within the unit square.
 """
 function random_static_obstacle(radius=0.2)
     c = @SVector rand(2)
@@ -55,7 +68,9 @@ end
 """
     DubinsDynamicRRTProblem{F,SO,DO}
 
-Defines the RRT* problem for a Dubins vehicle in a dynamic environment.
+Defines the RRT* problem for a Dubins vehicle in a dynamic environment. This is a concrete implementation of `RRTStar.AbstractProblem`.
+
+The state for this problem is a 4D vector `SVector{4,F}` representing `(x, y, θ, t)`, where `t` is the time.
 
 # Fields
 - `domain::Tuple{SVector{3,F},SVector{3,F}}`: The configuration space domain as `(min_bounds, max_bounds)` for `(x, y, θ)`.
@@ -159,7 +174,7 @@ Generates the shortest Dubins path between two configurations `q1` and `q2`.
 """
 function generate_path(problem, q1, q2)
     errcode, path = dubins_shortest_path(q1, q2, problem.turning_radius)
-    @assert errcode == Dubins.EDUBOK
+    @assert errcode == Dubins.EDUBOK "Dubins path generation failed with code $(errcode)"
     return path
 end
 
@@ -179,6 +194,10 @@ end
 
 Finds the node in the `hash_map` that is nearest to the random state `xt_rand`
 using the Dubins path length as the distance metric.
+
+Note: This implementation performs a brute-force search over all nodes. A more
+efficient version would use the `SpatialHashMap` to find a candidate set of near
+nodes first, then compute the exact Dubins distance for that smaller set.
 """
 function RRTStar.nearest(problem::DubinsDynamicRRTProblem, hash_map, xt_rand)
 
@@ -187,7 +206,6 @@ function RRTStar.nearest(problem::DubinsDynamicRRTProblem, hash_map, xt_rand)
     i_nearest = 0
     d_nearest = Inf
 
-    # for now, just go through all the nodes
     # TODO: Use spatial hash map to find a candidate set of near nodes first.
     for i in 1:length(hash_map)
         if !RRTStar.is_invalid(hash_map[i])
@@ -206,8 +224,9 @@ end
     RRTStar.near(problem::DubinsDynamicRRTProblem, hash_map, x_new)
 
 Returns a set of indices of nodes in the `hash_map` that are considered "near" the new state `x_new`.
-For now, this returns all nodes, but a more efficient implementation would use the spatial hash map
-to return only nodes within a certain radius.
+
+Note: This implementation considers all nodes to be "near". A more efficient implementation
+would use the `SpatialHashMap` to return only nodes within a certain radius.
 """
 function RRTStar.near(problem::DubinsDynamicRRTProblem, hash_map, x_new)
     # TODO: be more judicious about which nodes are nearby using the spatial hash map.
@@ -218,10 +237,11 @@ function RRTStar.near(problem::DubinsDynamicRRTProblem, hash_map, x_new)
 end
 
 """
-    RRTStar.steer(problem::DubinsDynamicRRTProblem, q_nearest::SVector{4,F}, q_rand::SVector, distance_fraction=0.2) where {F}
+    RRTStar.steer(problem::DubinsDynamicRRTProblem, q_nearest::SVector{4,F}, q_rand::SVector, distance_fraction=1.0) where {F}
 
 Steers from `q_nearest` towards `q_rand` for a given `distance_fraction` of the total Dubins path length.
-The state is time-augmented, so `q = (x, y, θ, t)`. The cost of the new edge is the length of the path segment.
+The state is time-augmented, so `q = (x, y, θ, t)`. The cost of the new edge is the length of the path segment,
+which is equivalent to the time elapsed.
 
 Returns `(q_new, cost)`, where `q_new` is the new state and `cost` is the path length.
 """
@@ -308,7 +328,8 @@ end
     RRTStar.goal_reachable(problem::DubinsDynamicRRTProblem, hash_map, i_new)
 
 Checks if the goal is reachable from the new node `i_new`.
-For this problem, it checks if the 2D position of the new node is within a certain tolerance of the goal's 2D position.
+For this problem, it checks if the 2D position of the new node is within a certain
+tolerance of the goal's 2D position.
 """
 function RRTStar.goal_reachable(problem::DubinsDynamicRRTProblem, hash_map, i_new)
 
@@ -325,13 +346,28 @@ function RRTStar.goal_reachable(problem::DubinsDynamicRRTProblem, hash_map, i_ne
     else
         return false
     end
+end
 
+"""
+    RRTStar.cost_to_goal(problem::DubinsDynamicRRTProblem, node::RRTStar.Node)
+
+Calculates the estimated cost from a node to the goal. For Dubins path, this is
+the Dubins distance from the node's state to the goal state.
+"""
+function RRTStar.cost_to_goal(problem::DubinsDynamicRRTProblem, node::RRTStar.Node)
+    if isnothing(problem.goal_state)
+        return Inf
+    end
+    return dubins_dist(problem, node.state[SOneTo(3)], problem.goal_state)
 end
 
 end
 
 
 ### Plotting Utilities ###
+# These functions are not part of the core module but are provided for convenience
+# to visualize the results, for example in a Jupyter notebook.
+using Plots, StaticArrays, Dubins
 
 """
     plot_node!(node; kwargs...)
@@ -385,6 +421,22 @@ function plot_tree!(problem, solution, i_root_node=1; kwargs...)
 
     # Plot all nodes in the hashmap
     scatter!([n.state[1] for n in solution.hash_map], [n.state[2] for n in solution.hash_map], markersize=0.5, label=false)
+end
+
+"""
+    plot_path!(problem, path; kwargs...)
+
+Plots a given path, which is a sequence of states.
+"""
+function plot_path!(problem, path; kwargs...)
+    # Plot the Dubins path segments
+    for i in 1:length(path)-1
+        x1 = path[i][SOneTo(3)]
+        x2 = path[i+1][SOneTo(3)]
+        p = DubinsDynamicPathRRT.generate_path(problem, x1, x2)
+        errcode, xs = Dubins.dubins_path_sample_many(p, 0.01)
+        plot!([x[1] for x in xs], [x[2] for x in xs], label=false, opacity=0.9, linecolor=:blue, markersize=0.2, linewidth=3.0; kwargs...)
+    end
 end
 
 """
