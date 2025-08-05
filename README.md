@@ -1,5 +1,8 @@
 # DynamicRRT.jl
 
+![Dubins RRT* with Dynamic Obstacles](examples/dubins_dynamic_rrt_star.png)
+![Dubins RRT* with Dynamic Obstacles Animation](examples/dubins_dynamic_rrt_star.gif)
+
 A Julia implementation of RRT* (Rapidly-exploring Random Trees) path planning algorithm with spatial hash maps for efficient navigation in dynamic environments.
 
 ## Overview
