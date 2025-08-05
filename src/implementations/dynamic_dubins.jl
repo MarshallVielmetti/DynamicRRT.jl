@@ -341,7 +341,10 @@ function RRTStar.goal_reachable(problem::DubinsDynamicRRTProblem, hash_map, i_ne
     x_new = RRTStar.spatial_position(problem, n_new.state)
 
     # TODO: This should also check the angle and potentially the final path segment for collisions.
-    if norm(problem.goal_state[SOneTo(2)] - x_new[SOneTo(2)]) <= 0.1
+    # TODO: Use a tolerance paramter?
+    # TODO: This should just change...should be if there exists a collision free path from the current
+    # TODO: pose to the goal imo.
+    if norm(problem.goal_state[SOneTo(2)] - x_new[SOneTo(2)]) <= 0.01
         return true
     else
         return false
