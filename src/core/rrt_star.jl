@@ -1,19 +1,39 @@
+"""
+    RRTStar
+
+This module provides a generic implementation of the RRT* (Rapidly-exploring Random Tree Star) algorithm.
+It is designed to be extended for specific path-planning problems by defining a concrete `AbstractProblem` type
+and implementing the required interface functions (e.g., `steer`, `collision_free`, `sample_free`).
+"""
 module RRTStar
 
 # export Node, rrt_star, get_best_path
 
 using ..SpatialHashMaps, StaticArrays
 
+"""
+    AbstractProblem{T}
+
+An abstract type representing a path-planning problem. A concrete implementation of `AbstractProblem`
+must be created for a specific use case, along with methods for the RRT* interface functions
+(e.g., `steer`, `collision_free`, `sample_free`, `nearest`, `near`, `spatial_position`, `goal_reachable`).
+The type parameter `T` represents the type of the state.
+"""
 abstract type AbstractProblem{T} end
 
 const LinearIndex = CartesianIndex{1}
 
 """
-    Node{T}(state::T, parent_index::Int64, incremental_cost::Float64)
+    Node{T}
 
-Defines a node in the RRT* Tree, with a defined `state`, `parent_index`, and the `incremental_cost` from the parent to the current node. 
-Nodes are stored in a spatial hash map for quick insertions and neighbor lookups.
+Represents a node in the RRT* tree.
 
+# Fields
+- `state::T`: The state associated with the node (e.g., position, orientation).
+- `parent::LinearIndex`: The index of the parent node in the `SpatialHashMap`.
+- `cost_so_far::Float64`: The cumulative cost from the root node to this node.
+- `children::Set{LinearIndex}`: A set of indices to the children of this node.
+- `is_invalid::Bool`: A flag indicating if the node is part of a valid path. This is used for dynamically marking branches as invalid if they become obstructed.
 """
 mutable struct Node{T}
     state::T
@@ -23,7 +43,11 @@ mutable struct Node{T}
     is_invalid::Bool
 end
 
+"""
+    RootNode(state::T) where {T}
 
+Constructs the root node of the RRT* tree. The root has no parent (parent index 0) and zero cost.
+"""
 function RootNode(state::T) where {T}
     parent = LinearIndex(0)
     cost_so_far = 0.0
@@ -37,7 +61,11 @@ function RootNode(state::T) where {T}
         is_invalid)
 end
 
+"""
+    ChildNode(state::T, i_parent::LinearIndex, cost_so_far) where {T}
 
+Constructs a child node with a given state, parent index, and cost from the root.
+"""
 function ChildNode(
     state::T,
     i_parent::LinearIndex,
@@ -58,15 +86,29 @@ function ChildNode(
     return node
 end
 
+"""
+    has_parent(node)
+
+Returns `true` if the node has a parent, `false` otherwise.
+"""
 function has_parent(node)
-    return node.parent[1] >= 0 # check the cartesian index >= 0
+    return node.parent[1] > 0 # Root parent index is 0
 end
 
+"""
+    is_invalid(node)
+
+Returns `true` if the node has been marked as invalid, `false` otherwise.
+"""
 function is_invalid(node)
     return node.is_invalid
 end
 
+"""
+    cost(node::Node{T}) where {T}
 
+Returns the cost of a node. Returns `Inf` if the node is invalid.
+"""
 function cost(node::Node{T}) where {T}
     if is_invalid(node)
         return Inf
@@ -74,10 +116,35 @@ function cost(node::Node{T}) where {T}
     return node.cost_so_far
 end
 
+"""
+    SolutionStatus
+
+An enum representing the termination status of the `solve!` function.
+- `GoalReachable`: The algorithm found a path to the goal.
+- `MaxIterations`: The algorithm terminated after reaching the maximum number of iterations.
+- `MaxTime`: The algorithm terminated after reaching the maximum time limit.
+- `NotSolved`: The algorithm has not been run or has not terminated yet.
+"""
 @enum SolutionStatus GoalReachable MaxIterations MaxTime NotSolved
 
+"""
+    AbstractSolution
+
+Abstract type for a solution to a path-planning problem.
+"""
 abstract type AbstractSolution end
 
+"""
+    RRTStarSolution{T,DIM,F,S}
+
+Contains the state of the RRT* algorithm's execution.
+
+# Fields
+- `root_node::Node{T}`: The root node of the tree.
+- `hash_map::SpatialHashMap{DIM,F,Node{T}}`: The spatial hash map storing all the nodes in the tree for efficient spatial queries.
+- `best_path::Union{Nothing,Vector{T}}`: The best path found so far (if any).
+- `status::S`: The `SolutionStatus` of the algorithm.
+"""
 mutable struct RRTStarSolution{T,DIM,F,S} <: AbstractSolution
     root_node::Node{T}
     hash_map::SpatialHashMap{DIM,F,Node{T}}
@@ -85,6 +152,19 @@ mutable struct RRTStarSolution{T,DIM,F,S} <: AbstractSolution
     status::S
 end
 
+"""
+    setup(problem::AbstractProblem, start_state::T, hash_map_widths::SVector{DIM,F}) where {DIM,F,T}
+
+Initializes the RRT* solver.
+
+# Arguments
+- `problem`: The problem definition.
+- `start_state`: The initial state of the agent.
+- `hash_map_widths`: The cell widths for the spatial hash map.
+
+# Returns
+- An `RRTStarSolution` object initialized with the root node.
+"""
 function setup(problem::AbstractProblem, start_state::T, hash_map_widths::SVector{DIM,F}) where {DIM,F,T}
 
     # create the spatial hash map
@@ -112,6 +192,26 @@ function setup(problem::AbstractProblem, start_state::T, hash_map_widths::SVecto
 
 end
 
+"""
+    solve!(problem::AbstractProblem, solution::RRTStarSolution; kwargs...)
+
+Runs the RRT* algorithm to find a path.
+
+# Arguments
+- `problem`: The problem definition.
+- `solution`: The solution object, initialized by `setup`.
+
+# Keyword Arguments
+- `max_iterations=1000`: The maximum number of iterations to run.
+- `max_time_seconds=1.0`: The maximum time in seconds to run the algorithm.
+- `distance_fraction=0.2`: The fraction of the distance to steer towards the random sample.
+- `do_rewire=true`: Whether to perform the RRT* rewiring step.
+- `early_exit=true`: Whether to exit as soon as a path to the goal is found.
+- `goal_bias=0.1`: The probability of sampling the goal state instead of a random state.
+
+# Returns
+- The updated `RRTStarSolution` object containing the final tree and solution status.
+"""
 function solve!(problem::AbstractProblem, solution::RRTStarSolution;
     max_iterations=1000,
     max_time_seconds=1.0,
@@ -161,11 +261,18 @@ function solve!(problem::AbstractProblem, solution::RRTStarSolution;
     # exited because of max iterations
     solution.status = MaxIterations
     return solution
-
 end
 
+"""
+    rrt_step!(problem::AbstractProblem, solution::RRTStarSolution; kwargs...)
 
+Performs a single iteration of the RRT* algorithm.
+This involves sampling a random state, finding the nearest node in the tree,
+steering towards the random state, and connecting the new node to the best parent in the neighborhood.
 
+# Returns
+- The `LinearIndex` of the newly added node, or `nothing` if no node was added.
+"""
 function rrt_step!(problem::AbstractProblem, solution::RRTStarSolution;
     distance_fraction=0.2,
     goal_bias=0.1)
@@ -179,7 +286,9 @@ function rrt_step!(problem::AbstractProblem, solution::RRTStarSolution;
 
     # find the nearest node
     i_nearest = nearest(problem, solution.hash_map, x_rand)
-    @assert !isnothing(i_nearest)
+    if isnothing(i_nearest) || i_nearest[1] == 0
+        return nothing
+    end
 
     # check the output
     n_nearest = solution.hash_map[i_nearest]
@@ -194,7 +303,7 @@ function rrt_step!(problem::AbstractProblem, solution::RRTStarSolution;
     # check that it is obstacle free
     if collision_free(problem, x_nearest, x_new)
 
-        # determine the best one to connect to 
+        # determine the best one to connect to
         best_i_near = i_nearest # best parent node
         best_n_near = n_nearest # best parent node
         best_x_new = x_new      # best child state
@@ -204,7 +313,9 @@ function rrt_step!(problem::AbstractProblem, solution::RRTStarSolution;
         I_near = near(problem, solution.hash_map, x_new)
 
         for i_near in I_near
-
+            if i_near[1] == 0
+                continue
+            end
             n_near = solution.hash_map[i_near]
 
             if is_invalid(n_near)
@@ -216,8 +327,8 @@ function rrt_step!(problem::AbstractProblem, solution::RRTStarSolution;
             c_candidate = cost(n_near) + cost_near_to_new_candidate
 
             if (c_candidate < best_c_new) && collision_free(problem, n_near.state, x_new_candidate)
-                best_i_near = i_near # update the best parent 
-                best_n_near = n_near # update the best parent 
+                best_i_near = i_near # update the best parent
+                best_n_near = n_near # update the best parent
                 best_x_new = x_new_candidate # update the resulting state
                 best_c_new = c_candidate # update the cost of the new child
             end
@@ -240,14 +351,21 @@ function rrt_step!(problem::AbstractProblem, solution::RRTStarSolution;
     return nothing
 end
 
+"""
+    rrt_rewire!(problem::AbstractProblem, solution::RRTStarSolution, i_new_node::LinearIndex)
 
-
-
+Performs the rewiring step of the RRT* algorithm for the `i_new_node`.
+It checks all neighbors of the new node and rewires their parent to be the new node if it results
+in a lower-cost path.
+"""
 function rrt_rewire!(problem::AbstractProblem, solution::RRTStarSolution, i_new_node::LinearIndex)
     n_new = solution.hash_map[i_new_node]
     I_near = near(problem, solution.hash_map, n_new.state)
 
     for i_near in I_near
+        if i_near[1] == 0
+            continue
+        end
         n_near = solution.hash_map[i_near]
         if is_invalid(n_near) || !has_parent(n_near) # skip the root node or any invalid nodes
             continue
@@ -261,7 +379,11 @@ function rrt_rewire!(problem::AbstractProblem, solution::RRTStarSolution, i_new_
 end
 
 """
-    checks if we can rewire nodes's parent to new_parent
+    can_rewire(problem, solution, i_node, i_new_parent)
+
+Checks if a `node` can be rewired to have `new_parent` as its parent.
+Rewiring is possible if the path from `new_parent` to `node` is collision-free
+and the total cost through `new_parent` is less than the node's current cost.
 """
 function can_rewire(problem, solution, i_node, i_new_parent)
 
@@ -289,8 +411,10 @@ end
 
 
 """
-change the parent of i_node to i_new_parent
-also handles updating the childrens lists and the parent id
+    change_parent!(problem::AbstractProblem, solution, i_node, i_new_parent)
+
+Changes the parent of `i_node` to `i_new_parent`.
+This involves updating the parent index of the node and adjusting the `children` sets of both the old and new parents.
 """
 function change_parent!(problem::AbstractProblem, solution, i_node, i_new_parent)
 
@@ -316,7 +440,11 @@ function change_parent!(problem::AbstractProblem, solution, i_node, i_new_parent
 end
 
 """
-Starting at node id, recalculate the cost for all the children, traversing down the tree
+    recalculate_tree!(problem::AbstractProblem, solution, i_node)
+
+Recursively recalculates the cost and state of all descendants of `i_node`.
+This is called after a rewiring operation to propagate the cost changes down the tree.
+If a branch becomes invalid due to a collision, it marks the branch as such.
 """
 function recalculate_tree!(problem::AbstractProblem, solution, i_node)
 
@@ -335,10 +463,10 @@ function recalculate_tree!(problem::AbstractProblem, solution, i_node)
         # (in dynamic problems this is needed to update the time of the state)
         n_child.state, stage_cost = steer(problem, n_node.state, n_child.state, 1.0)
 
-        # this might also require changing the node's position
+        # this might also require changing the node's position in the hash map
         SpatialHashMaps.change_position!(solution.hash_map, i_child, spatial_position(problem, n_child.state))
 
-        # check for collision along path 
+        # check for collision along path
         if collision_free(problem, n_node.state, n_child.state)
 
             # update the costs
@@ -348,7 +476,7 @@ function recalculate_tree!(problem::AbstractProblem, solution, i_node)
             recalculate_tree!(problem, solution, i_child)
         else
             # mark this child and all children as invalid
-            mark_branch_as_invalid(problem, solution, i_node)
+            mark_branch_as_invalid(problem, solution, i_child)
         end
     end
 
@@ -357,8 +485,10 @@ function recalculate_tree!(problem::AbstractProblem, solution, i_node)
 end
 
 """
-starting from this node, mark all the children associated with this branch as invalid
-Does not modify the parent/child lists
+    mark_branch_as_invalid(problem, solution, i_node)
+
+Recursively marks a node and all its descendants as invalid.
+This does not modify the parent/child lists, only the `is_invalid` flag.
 """
 function mark_branch_as_invalid(problem, solution, i_node)
 
@@ -374,37 +504,75 @@ function mark_branch_as_invalid(problem, solution, i_node)
 end
 
 
-# the following functions need to be defined for your problem
+# -------------------------------------------------------------------------------- #
+# Abstract Problem Interface
+#
+# The following functions must be implemented for a concrete `AbstractProblem` type
+# to define the specific behavior of the RRT* algorithm.
+# -------------------------------------------------------------------------------- #
+
+"""
+    sample_free(problem::P; goal_bias=0.0, hash_map=nothing)
+
+Sample a random state from the free space.
+"""
 function sample_free(problem::P; goal_bias=0.0, hash_map=nothing) where {T,P<:AbstractProblem{T}}
     throw(MethodError(sample_free, (problem, goal_bias, hash_map)))
 end
 
+"""
+    nearest(problem::P, hash_map, x_rand)
+
+Find the nearest node in the `hash_map` to the state `x_rand`.
+"""
 function nearest(problem::P, hash_map, x_rand) where {T,P<:AbstractProblem{T}}
-    throw(MethodError(nearest, (problem, nodes, x_rand)))
+    throw(MethodError(nearest, (problem, hash_map, x_rand)))
 end
 
+"""
+    near(problem::P, hash_map, x_new)
+
+Find all nodes in the `hash_map` within a certain radius of the state `x_new`.
+"""
 function near(problem::P, hash_map, x_new) where {T,P<:AbstractProblem{T}}
-    throw(MethodError(near, (problem, nodes, x_new)))
+    throw(MethodError(near, (problem, hash_map, x_new)))
 end
 
+"""
+    steer(problem::P, x_nearest, x_rand, distance_fraction)
+
+Steer from `x_nearest` towards `x_rand` by a `distance_fraction`.
+Returns `(new_state, cost)`.
+"""
 function steer(problem::P, x_nearest, x_rand, distance_fraction) where {T,P<:AbstractProblem{T}}
     throw(MethodError(steer, (problem, x_nearest, x_rand, distance_fraction)))
 end
 
-function collision_free(problem::P, x_nearest, x_new) where {T,P<:AbstractProblem{T}}
-    throw(MethodError(collision_free, (problem, x_nearest, x_new)))
+"""
+    collision_free(problem::P, x_from, x_to)
+
+Check if the path from `x_from` to `x_to` is collision-free.
+"""
+function collision_free(problem::P, x_from, x_to) where {T,P<:AbstractProblem{T}}
+    throw(MethodError(collision_free, (problem, x_from, x_to)))
 end
 
-# function path_cost(problem::P, x_near, x_new) where {T,P<:AbstractProblem{T}}
-#     throw(MethodError(path_cost, (problem, x_near, x_new)))
-# end
+"""
+    spatial_position(problem::P, x::T)
 
+Extract the spatial component of a state `x` for use in the `SpatialHashMap`.
+"""
 function spatial_position(problem::P, x::T) where {T,P<:AbstractProblem{T}}
     throw(MethodError(spatial_position, (problem, x)))
 end
 
+"""
+    goal_reachable(problem::P, hash_map, i_new)
+
+Check if the goal is reachable from the new node `i_new`.
+"""
 function goal_reachable(problem::P, hash_map, i_new) where {T,P<:AbstractProblem{T}}
-    throw(MethodError(goal_reachable, (problem, solution, i_new)))
+    throw(MethodError(goal_reachable, (problem, hash_map, i_new)))
 end
 
 end
