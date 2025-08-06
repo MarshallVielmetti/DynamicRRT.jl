@@ -85,9 +85,10 @@ struct DubinsDynamicRRTProblem{F,SO,DO} <: RRTStar.AbstractProblem{SVector{4,F}}
     static_obstacles::Vector{SO}
     dynamic_obstacles::Vector{DO}
     goal_state::Union{Nothing,SVector{3,F}}
+    strict_bounds::Bool
 end
 
-DynamicRRTProblem(domain, ρ, static_obs, dynamic_obs) = DubinsDynamicRRTProblem(domain, ρ, static_obs, dynamic_obs, nothing)
+DynamicRRTProblem(domain, ρ, static_obs, dynamic_obs) = DubinsDynamicRRTProblem(domain, ρ, static_obs, dynamic_obs, nothing, true)
 
 """
     sample_domain(P::DubinsDynamicRRTProblem)
@@ -187,6 +188,24 @@ function dubins_dist(problem, q1, q2)
     path = generate_path(problem, q1, q2)
     L = dubins_path_length(path)
     return L
+end
+
+"""
+    in_bounds(domain::Tuple{SVector{3,F}, SVector{3,F}}, pos::SVector{3,F})::Bool where {F<:Real}
+
+Checks whether a given position vector `pos` is within the specified bounds `domain`.
+
+# Arguments
+- `domain::Tuple{SVector{3,F}, SVector{3,F}}`: A tuple containing two 3D static vectors (`SVector`), 
+  representing the minimum and maximum bounds of the domain.
+- `pos::SVector{3,F}`: A 3D static vector (`SVector`) representing the position to check.
+
+# Returns
+- `Bool`: `true` if `pos` is within the bounds defined by `domain`, otherwise `false`.
+"""
+function in_bounds(domain::Tuple{SVector{3,F},SVector{3,F}}, pos::SVector{3,F})::Bool where {F<:Real}
+    min_bounds, max_bounds = domain
+    return all(min_bounds .<= pos .<= max_bounds)
 end
 
 """
@@ -301,6 +320,10 @@ function RRTStar.collision_free(
     for t_path in range(0, stop=L, step=step_size)
         errcode, x = dubins_path_sample(path, t_path)
         @assert errcode == Dubins.EDUBOK
+
+        if problem.strict_bounds && !in_bounds(domain, x)
+            return false
+        end
 
         # The state includes the time component for dynamic collision checking
         q = SVector(x..., t_nearest + t_path)

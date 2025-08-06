@@ -12,7 +12,7 @@ min_domain = SVector(0, 0.0, -π)
 max_domain = SVector(1.0, 1.0, π)
 domain = (min_domain, max_domain)
 
-static_obstacles = [DubinsDynamicPathRRT.random_static_obstacle() for i = 1:2]
+static_obstacles = [DubinsDynamicPathRRT.random_static_obstacle() for i = SOneTo(2)]
 dynamic_obstacles = [
     DubinsDynamicPathRRT.DynamicCircleObstacle(
         t -> SVector(0.5 + 0.5 * sin(-t), 0.3),
@@ -25,7 +25,7 @@ dynamic_obstacles = [
 
 goal_state = SVector(1, 1.0, 0.0)
 turning_radius = 0.1
-rrt_problem = DubinsDynamicPathRRT.DubinsDynamicRRTProblem(domain, 0.1, static_obstacles, dynamic_obstacles, goal_state)
+rrt_problem = DubinsDynamicPathRRT.DubinsDynamicRRTProblem(domain, 0.1, static_obstacles, dynamic_obstacles, goal_state, true)
 
 start_state = SVector(0.0, 0.0, 0.0, 0.0)
 
