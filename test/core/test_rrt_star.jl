@@ -9,7 +9,7 @@ This allows for isolated testing of the tree-building, rewiring, and manipulatio
 The state is a simple 2D point, and steering is a linear interpolation.
 """
 struct MockProblem <: RRTStar.AbstractProblem{SVector{2,Float64}}
-    goal::SVector{2,Float64}
+    goal_state::SVector{2,Float64}
 end
 MockProblem() = MockProblem(@SVector [10.0, 10.0])
 
@@ -23,6 +23,10 @@ function RRTStar.collision_free(::MockProblem, x_nearest, x_new)
 end
 
 function RRTStar.spatial_position(::MockProblem, x)
+    return x
+end
+
+function RRTStar.path_pose(::MockProblem, x)
     return x
 end
 
@@ -40,7 +44,11 @@ end
 
 function RRTStar.goal_reachable(problem::MockProblem, hash_map, i_new)
     node = hash_map[i_new]
-    return norm(node.state - problem.goal) < 0.1
+    return norm(node.state - problem.goal_state) < 0.1
+end
+
+function RRTStar.cost_to_goal(problem::MockProblem, node::RRTStar.Node)
+    return norm(node.state - problem.goal_state)
 end
 
 
@@ -169,7 +177,7 @@ end
 
         @testset "extract_path" begin
             # Tests that the path is correctly reconstructed from the tree.
-            path = RRTStar.extract_path(solution, RRTStar.LinearIndex(i_goal))
+            path = RRTStar.extract_path(problem, solution, RRTStar.LinearIndex(i_goal))
             @test length(path) == 4
             @test path[1] == start_state
             @test path[2] == node_a.state

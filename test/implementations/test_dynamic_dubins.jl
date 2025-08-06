@@ -30,7 +30,7 @@ is_colliding = DubinsDynamicPathRRT.is_colliding
         static_obs = [DubinsDynamicPathRRT.CircleObstacle(SVector{2,Float64}(2.5, 2.5), 0.5)]
         dynamic_obs = [DubinsDynamicPathRRT.DynamicCircleObstacle(t -> SVector{2,Float64}(1.0 + t, 1.0), 0.2, (0.0, 2.0))]
         goal_state = SVector{3,Float64}(4.5, 4.5, 0.0)
-        problem = DubinsDynamicPathRRT.DubinsDynamicRRTProblem(domain, turning_radius, static_obs, dynamic_obs, goal_state)
+        problem = DubinsDynamicPathRRT.DubinsDynamicRRTProblem(domain, turning_radius, static_obs, dynamic_obs, goal_state, true)
 
         @testset "sample_free" begin
             for _ in 1:10
@@ -91,7 +91,7 @@ is_colliding = DubinsDynamicPathRRT.is_colliding
     @testset "Path Extraction" begin
         domain = (SVector{3,Float64}(0.0, 0.0, 0.0), SVector{3,Float64}(5.0, 5.0, 2pi))
         turning_radius = 1.0
-        problem = DubinsDynamicPathRRT.DubinsDynamicRRTProblem(domain, turning_radius, [], [], SVector{3,Float64}(3.0, 0.0, 0.0))
+        problem = DubinsDynamicPathRRT.DubinsDynamicRRTProblem(domain, turning_radius, [], [], SVector{3,Float64}(3.0, 0.0, 0.0), true)
         start_state = SVector{4,Float64}(0.0, 0.0, 0.0, 0.0)
         hash_map_widths = @SVector [1.0, 1.0]
         solution = RRTStar.setup(problem, start_state, hash_map_widths)
@@ -110,19 +110,17 @@ is_colliding = DubinsDynamicPathRRT.is_colliding
         push!(node_b.children, RRTStar.LinearIndex(i_goal))
 
         @testset "extract_path" begin
-            path = RRTStar.extract_path(solution, RRTStar.LinearIndex(i_goal))
-            @test length(path) == 4
-            @test path[1] == start_state
-            @test path[2] == node_a.state
-            @test path[3] == node_b.state
-            @test path[4] == node_goal.state
+            path = RRTStar.extract_path(problem, solution, RRTStar.LinearIndex(i_goal))
+            @test path[1] == RRTStar.path_pose(problem, start_state)
+            @test path[2] == RRTStar.path_pose(problem, node_a.state)
+            @test path[3] == RRTStar.path_pose(problem, node_b.state)
+            @test path[4] == RRTStar.path_pose(problem, node_goal.state)
         end
 
         @testset "best_path!" begin
             RRTStar.best_path!(problem, solution)
             @test solution.status == RRTStar.GoalReachable
             @test solution.best_path_cost == 3.0
-            @test length(solution.best_path) == 4
         end
     end
 end

@@ -346,6 +346,12 @@ function RRTStar.spatial_position(problem::DubinsDynamicRRTProblem, x::T) where 
     return x[SOneTo(2)]
 end
 
+function RRTStar.path_pose(problem::DubinsDynamicRRTProblem, x::T) where {T}
+    # For Dubins paths, we want the full state [x,y,θ] but not time
+    return x[SOneTo(3)]
+end
+
+
 """
     RRTStar.goal_reachable(problem::DubinsDynamicRRTProblem, hash_map, i_new)
 
@@ -365,9 +371,16 @@ Calculates the estimated cost from a node to the goal. For Dubins path, this is
 the Dubins distance from the node's state to the goal state.
 """
 function RRTStar.cost_to_goal(problem::DubinsDynamicRRTProblem, node::RRTStar.Node)
+    # If no goal state defined, return infinity cost.
     if isnothing(problem.goal_state)
         return Inf
     end
+
+    # If the node is very close to the goal, return zero cost.
+    if norm(node.state[SOneTo(3)] - problem.goal_state[SOneTo(3)]) < 1e-3
+        return 0.0
+    end
+
     return dubins_dist(problem, node.state[SOneTo(3)], problem.goal_state)
 end
 

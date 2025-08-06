@@ -9,7 +9,7 @@ module RRTStar
 
 # export Node, rrt_star, get_best_path
 
-using ..SpatialHashMaps, StaticArrays
+using ..SpatialHashMaps, StaticArrays, LinearAlgebra
 
 """
     AbstractProblem{T}
@@ -149,7 +149,7 @@ Contains the state of the RRT* algorithm's execution.
 mutable struct RRTStarSolution{T,DIM,F,S} <: AbstractSolution
     root_node::Node{T}
     hash_map::SpatialHashMap{DIM,F,Node{T}}
-    best_path::Union{Nothing,Vector{T}}
+    best_path::Union{Nothing,AbstractVector}
     best_path_cost::Float64
     status::S
 end
@@ -534,8 +534,13 @@ function best_path!(problem::AbstractProblem, solution::RRTStarSolution)
         c = cost(node) + cost_to_goal(problem, node)
         if c < solution.best_path_cost
             solution.best_path_cost = c
-            solution.best_path = extract_path(solution, i)
-            push!(solution.best_path, SVector{4,Float64}(problem.goal_state..., 0.0)) # Append the goal state to the path
+            solution.best_path = extract_path(problem, solution, i)
+
+            # Deals with the case where one of the nodes in the path is very close to the goal
+            # so we do not need to explicitly add the goal state to the path.
+            if (norm(solution.best_path[end] - problem.goal_state) >= 1e-3)
+                push!(solution.best_path, problem.goal_state) # Append the goal state to the path
+            end
         end
     end
 end
@@ -546,14 +551,14 @@ end
 Extracts the path from the root to the node at index `node_i` by backtracking from child to parent.
 Returns a vector of states representing the path.
 """
-function extract_path(solution::RRTStarSolution, node_i)
+function extract_path(problem::AbstractProblem, solution::RRTStarSolution, node_i)
     path = []
     current = solution.hash_map[node_i]
 
-    push!(path, current.state)
+    push!(path, path_pose(problem, current.state))
     while !isnothing(current) && has_parent(current)
         current = solution.hash_map[current.parent]
-        push!(path, current.state)
+        push!(path, path_pose(problem, current.state))
     end
     return reverse(path)
 end
@@ -619,6 +624,15 @@ Extract the spatial component of a state `x` for use in the `SpatialHashMap`.
 """
 function spatial_position(problem::P, x::T) where {T,P<:AbstractProblem{T}}
     throw(MethodError(spatial_position, (problem, x)))
+end
+
+"""
+    path_pose(problem::P, x::T)
+
+Return the component of the state 'x' that is desired for the actual path state
+"""
+function path_pose(problem::P, x::T) where {T,P<:AbstractProblem{T}}
+    throw(MethodError(path_pose, (problem, x)))
 end
 
 """
