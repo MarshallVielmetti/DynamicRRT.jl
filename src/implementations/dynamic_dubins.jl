@@ -320,9 +320,9 @@ function RRTStar.collision_free(
         errcode, x = dubins_path_sample(path, t_path)
         @assert errcode == Dubins.EDUBOK
 
-        # if problem.strict_bounds && !in_bounds(problem.domain, x)
-        #     return false
-        # end
+        if problem.strict_bounds && !in_bounds(problem.domain, x)
+            return false
+        end
 
         # The state includes the time component for dynamic collision checking
         q = SVector(x..., t_nearest + t_path)
