@@ -205,7 +205,7 @@ Checks whether a given position vector `pos` is within the specified bounds `dom
 """
 function in_bounds(domain::Tuple{SVector{3,F},SVector{3,F}}, pos::SVector{3,F})::Bool where {F<:Real}
     min_bounds, max_bounds = domain
-    return all(min_bounds .<= pos .<= max_bounds)
+    return all(min_bounds[SOneTo(2)] .<= pos[SOneTo(2)] .<= max_bounds[SOneTo(2)])
 end
 
 """
@@ -306,7 +306,6 @@ function RRTStar.collision_free(
     q_new; # time indexed
     step_size=0.001,
 )
-
     # extract variables
     t_nearest = q_nearest[4]
     x_nearest = q_nearest[SOneTo(3)]
