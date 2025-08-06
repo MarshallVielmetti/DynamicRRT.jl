@@ -531,7 +531,7 @@ function best_path!(problem::AbstractProblem, solution::RRTStarSolution)
         solution.status = GoalReachable
 
         # Compute the total cost to the goal using that node
-        c = cost(node)
+        c = cost(node) + cost_to_goal(problem, node)
         if c < solution.best_path_cost
             solution.best_path_cost = c
             solution.best_path = extract_path(solution, i)
