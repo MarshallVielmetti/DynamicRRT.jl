@@ -16,7 +16,7 @@ module DubinsDynamicPathRRT
 using ..RRTStar
 using ..SpatialHashMaps
 using StaticArrays, LinearAlgebra
-using Dubins
+using Dubins, OccupancyGrids
 
 """
 Abstract base type for all obstacles.
