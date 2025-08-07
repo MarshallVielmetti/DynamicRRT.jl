@@ -55,6 +55,23 @@ end
 DynamicCircleObstacle(c, r) = DynamicCircleObstacle(c, r, (-Inf, Inf))
 
 """
+    OccupancyGridObstacle{F}
+Represents an obstacle defined by an occupancy grid map.
+The grid map should be pre-inflated by the required amount.
+"""
+struct OccupancyGridObstacle{F} <: Obstacle{F}
+    grid::OccupancyGrid{F}
+end
+
+"""
+    Checks if a state `q` collides with the obstacle.
+The occupancy grid map is expected to be pre-inflated by the correct amount.
+"""
+function is_colliding(o::OccupancyGridObstacle, q::SVector)
+    return is_occupied(o.grid, q)
+end
+
+"""
     random_static_obstacle(radius=0.2)
 
 Generates a `CircleObstacle` with a random center and radius within the unit square.
