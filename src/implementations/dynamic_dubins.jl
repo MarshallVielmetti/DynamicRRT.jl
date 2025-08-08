@@ -55,12 +55,12 @@ end
 DynamicCircleObstacle(c, r) = DynamicCircleObstacle(c, r, (-Inf, Inf))
 
 """
-    OccupancyGridObstacle{F}
+    OccupancyGridObstacle{G}
 Represents an obstacle defined by an occupancy grid map.
 The grid map should be pre-inflated by the required amount.
 """
-struct OccupancyGridObstacle{F} <: Obstacle{F}
-    grid::OccupancyGrid{F}
+struct OccupancyGridObstacle{G} <: Obstacle{Float64}
+    grid::G
 end
 
 """
